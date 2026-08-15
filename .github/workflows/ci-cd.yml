@@ -1,0 +1,70 @@
+name: CI/CD Pipeline
+
+# GATILHOS: quando o pipeline deve rodar
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # permite acionar manualmente pelo botão "Run workflow"
+
+# PERMISSÕES necessárias para publicar no GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Cancela execuções antigas se um novo push chegar
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # ============================================
+  # JOB 1 - INTEGRAÇÃO CONTÍNUA (CI)
+  # ============================================
+  ci:
+    name: Instalar, Testar e Buildar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: 2. Preparar o Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: 3. Instalar dependências
+        run: npm ci
+
+      - name: 4. Executar testes automatizados com cobertura
+        run: npm run coverage
+
+      - name: 5. Buildar a aplicação
+        run: npm run build
+
+      - name: 6. Guardar o build para o job de deploy
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  # ============================================
+  # JOB 2 - ENTREGA CONTÍNUA (CD)
+  # ============================================
+  deploy:
+    name: Publicar no GitHub Pages
+    needs: ci # só roda se o job "ci" passar
+    if: github.ref == 'refs/heads/main' # só publica a partir da main
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Fazer o deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
